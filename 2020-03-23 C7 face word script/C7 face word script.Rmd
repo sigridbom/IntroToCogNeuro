@@ -22,13 +22,5 @@ cor.test(df$score_pc, df$score_warriner)
 ```
 
 Negatively correlated. As the score_pc increase the score_warriner decrease.
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Pearson's cor = -0.94 (very highly correlated, almost perfect correlation). 
+Pearson's correlation test was found to be significant, t(358) = -50.186, p<.01
