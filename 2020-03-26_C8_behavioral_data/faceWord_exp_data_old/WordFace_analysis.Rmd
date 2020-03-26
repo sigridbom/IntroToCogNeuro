@@ -1,0 +1,185 @@
+---
+title: "WordFace_data_analysis"
+author: "Mikkel Wallentin"
+date: "10/9/2019"
+output: html_document
+---
+
+## Load data from folder
+```{r}
+setwd("~/Dropbox/cog_neurosci_advanced_MSc_Cog_Sci_2019/cog_neurosci_adv_FaceWord_exp_2019/faceWord_exp_data")
+datadir<-"~/Dropbox/cog_neurosci_advanced_MSc_Cog_Sci_2019/cog_neurosci_adv_FaceWord_exp_2019/faceWord_exp_data"
+
+#Find files related to session 1b, 2b  and 3b
+files_WordFace<-list.files(datadir,pattern='+?).csv')
+files_WordFace
+
+for(iii in 1:length(files_WordFace)){
+  if(exists('data1')) rm(data1)
+  
+  #find time point from log-file name
+  xx<-files_WordFace[iii]
+  h<-substr(xx, nchar(xx)-12, nchar(xx)-11)
+  m<-substr(xx, nchar(xx)-9, nchar(xx)-8)
+  time=as.integer(paste(h,m,sep=''))
+  #Load data
+  data1<-read.csv(files_WordFace[iii])
+  if(length(data1$rt)>10){
+    data1$time<-time+(data1$onset_img/60)
+    data1$ID=as.character(data1$ID)
+    data1$correct=mean(data1$correct_resp)
+    data1$imgN1<-data1$img[c(60, 1:59)]
+  }
+  if(iii ==1) WordFace=data1 else WordFace=rbind(data1,WordFace)
+}
+WordFace=subset(WordFace,correct_resp==1)
+WordFace=subset(WordFace,rt>0.1)
+```
+
+## model
+
+```{r}
+library(lmerTest)
+model<-lmer(rt~img+imgN1+word_score_pc+abs(word_score_pc)+no+session+delay_frames_before+(1 | ID)+(1 | word),data=WordFace)
+summary(model)
+```
+
+```{r}
+plot(model)
+# qqplot of the random effects with their variances
+randoms<-ranef(model, condVar = TRUE)
+qq <- attr(ranef(model, condVar = TRUE)[[1]], "postVar")
+rand.interc<-randoms$word
+df<-data.frame(Intercepts=randoms$word[,1],
+              sd.interc=2*sqrt(qq[,,1:length(qq)]),
+              lev.names=rownames(rand.interc))
+df$lev.names<-factor(df$lev.names,levels=df$lev.names[order(df$Intercepts)])
+library(ggplot2)
+p <- ggplot(df,aes(lev.names,Intercepts))
+
+#Added horizontal line at y=0, error bars to points and points with size two
+p <- p + geom_hline(yintercept=0) +geom_errorbar(aes(ymin=Intercepts-sd.interc, ymax=Intercepts+sd.interc), width=0,color="black") + geom_point(aes(size=2)) 
+
+#Removed legends and with scale_shape_manual point shapes set to 1 and 16
+p <- p + guides(size=FALSE,shape=FALSE) 
+
+#Changed appearance of plot (black and white theme) and x and y axis labels
+p <- p + theme_bw() + xlab("Levels") + ylab("")
+
+#Final adjustments of plot
+p <- p + theme(axis.text.x=element_text(size=rel(1.2)),
+               axis.title.x=element_text(size=rel(1.3)),
+               axis.text.y=element_text(size=rel(1.2)),
+               panel.grid.minor=element_blank(),
+               panel.grid.major.x=element_blank())
+
+#To put levels on y axis you just need to use coord_flip()
+#p <- p+ coord_flip()
+print(p)
+```
+## Including Plots
+
+```{r}
+library(ggplot2)
+
+figure<-ggplot(aes(x=word_label,y=rt),data=WordFace)+geom_boxplot()
+figure
+```
+
+```{r}
+library(ggplot2)
+
+#wordFace$rtlog<-log(wordFace$rt)
+figure<-ggplot(aes(x=word_score_pc,y=rt),data=WordFace)+geom_smooth()+facet_wrap(ID~.)
+figure
+
+figure<-ggplot(aes(x=word_score_pc,y=rt),data=WordFace)+geom_smooth()+geom_text(aes(label=word,col=img))+facet_wrap(ID~.)
+figure
+```
+
+
+```{r}
+library(ggplot2)
+
+#wordFace$rtlog<-log(wordFace$rt)
+figure<-ggplot(aes(x=no,y=rt),data=WordFace)+geom_smooth()+geom_point(aes(col=word_label))+facet_wrap(~ID)
+figure
+
+#wordFace$rtlog<-log(wordFace$rt)
+figure<-ggplot(aes(x=no,y=rt),data=WordFace)+geom_smooth()
+figure
+
+# Time of day
+figure<-ggplot(aes(x=time,y=rt),data=WordFace)+geom_smooth()#+geom_point()
+figure
+```
+
+#### A table showing mean RT over words
+
+```{r, warning=FALSE, message=FALSE, cache=FALSE}
+
+# A table showing the proportion of males drawn left as a function of the independent variables
+WordFaceAgg <-aggregate(WordFace$rt,
+    by=list(WordFace$word,WordFace$word_score_pc,WordFace$word_label),
+                    FUN=median, na.rm=TRUE)
+
+library(reshape)
+names(WordFaceAgg)<-c('word','word_score_pc','word_label','rt')
+
+figure<-ggplot(aes(x=word_score_pc,y=rt),data=WordFaceAgg)+geom_smooth()+geom_text(aes(label=word,col=word_label))
+figure
+```
+
+# Import Binder semantic features
+```{r}
+
+library(xlsx)
+
+binder <- read.xlsx('~/Dropbox/DeixisSurvey2/mturk_survey/WordSet1_Ratings.xlsx', sheetIndex = 1)
+
+# Find indices of columns
+cols_binder_sem <- c(6:70)
+cols_binder_full <- c(6:74)
+
+# Format columns
+to_numeric <- function(x) {as.numeric(levels(x))[x]}
+to_convert <- names(dplyr::select_if(binder[,cols_binder_full], is.factor))
+
+
+#Convert semantic ratings to numeric values
+binder[, to_convert] <- sapply(binder[, to_convert], to_numeric)
+
+#Function to impute NAs with NAmean
+na_to_mean <- function(x) {x[is.na(x)]= mean(x, na.rm=TRUE);return(x)}
+binder[, to_convert] <- sapply(binder[, cols_binder_full], na_to_mean)
+
+#scale binder
+binder[,cols_binder_full] <- apply(binder[,cols_binder_full], 2, scale)
+
+head(binder)
+
+binderpca_raw<-princomp(binder[,6:70])
+binderpca<-data.frame(binder$Word,binderpca_raw$scores) %>%
+rename_at(vars(names(.)[1]), funs(c('Word'))) 
+```
+
+### Merge RT data and Binder data
+```{r}
+# Add binder features
+WordFace_Bin <- WordFace %>% rename_at(vars(names(.)[28]), funs(c('Word'))) %>%
+  merge(., binderpca, by = 'Word')
+
+```
+### Testing whether Binder PCA scores improves models for RT
+```{r}
+fmla <- as.formula(paste("rt ~ ",paste('img+imgN1+word_score_pc+abs(word_score_pc)+no+session+delay_frames_before+(1|ID)+(1|Word)')))
+#fmla<-as.formula(paste(fmla,paste('+(1|ID)')))
+model1<-lmer(fmla , data=WordFace_Bin)
+
+fmla <- as.formula(paste("rt ~ ", paste(names(WordFace_Bin[,33:94]), collapse= "+"),paste('+img+imgN1+word_score_pc+abs(word_score_pc)+no+session+delay_frames_before+(1|ID)+(1|Word)')))
+#fmla<-as.formula(paste(fmla,paste('+(1|ID)')))
+model_pca<-lmer(fmla , data=WordFace_Bin)
+
+summary(model_pca)
+anova(model1,model_pca)
+```

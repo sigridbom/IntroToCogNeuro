@@ -1,0 +1,234 @@
+---
+title: "class08_code"
+author: "Mikkel Wallentin"
+date: "3/25/2020"
+output: html_document
+---
+# Code in a horrible mess
+
+## Load data from folder
+```{r}
+library(dplyr) #has bind() function that allows to bind rows with unequal number of columns
+pacman::p_load(readxl)
+getwd()
+
+#Find data from the fall 2019 master students
+datadir1<-"faceWord_exp_data_old"
+#Find data from the spring 2020 students
+datadir2<-"faceWord_exp_data_2020"
+
+#Make a list of files from the two sources
+files_WordFace<-list.files(c(datadir1,datadir2),pattern='+?).csv',full.names = TRUE)
+
+#Create a loop for loading and preprocessing
+for(iii in 1:length(files_WordFace)){
+  if(exists('data1')) rm(data1)
+  
+  #find time of day from log-file name
+  xx<-files_WordFace[iii]
+  #Counting file name characters from behind to find time in hours
+  h<-substr(xx, nchar(xx)-12, nchar(xx)-11)
+  #Counting file name characters from behind to find time in minutes
+  m<-substr(xx, nchar(xx)-9, nchar(xx)-8)
+  #Turn the minutes into fractions of an hour (because there only is 60 minutes per hour)
+  m<-100*(as.integer(m)/60)
+  #paste together as 4 digit numer (ignoring that there are only 60 minutes per hour).
+  time=as.integer(paste(h,m,sep=''))
+  
+  #Load data
+  data1<-read.csv(files_WordFace[iii])
+  
+  #Time of day: Add fractions of hour from log data to the time covariate
+  data1$time<-time+(100*(data1$onset_img/60)/60)
+  
+  #Add some covariates if there is a full dataset
+  if(length(data1$no)>1){
+  #indices of trials before the present
+  oneback<-c(1,data1$no[2:length(data1$no)]-1)
+  #Add a covariate to see if the image from the previous trial had an influence on the response
+  data1$imgN1<-data1$img[oneback]
+  #Add a covariate to see if the word type from the previous trial had an influence on the response
+  data1$word_labelN1<-data1$word_label[oneback]
+   #Add a covariate to see if the word score from the previous trial had an influence on the response
+  data1$word_score_pcN1<- -data1$word_score_pc[oneback]
+  }
+
+
+  #Some participants misunderstood instructions and responded to words rather than images. This gives negative RTs. We need to filter out these data and unrealisticly fast RTs
+  data1=subset(data1,rt>0.1)
+  
+  data1$ID=as.character(data1$ID)
+    
+  #One participant saved every session under a different ID
+  if(length(data1$ID)>1){
+  if(data1$ID[1]=='holymolly'|data1$ID[1]=='owl'|data1$ID[1]=='pjh'|data1$ID[1]=='roo'|data1$ID[1]=='yogafrogen'){data1$ID<-'vicedor'}
+  
+  #Percentage accurcay in session
+  data1$correct=sum(data1$correct_resp==1)/60
+  }  
+  
+  if(iii ==1) WordFace=data1 else if(length(data1$ID)>0) WordFace=bind_rows(data1,WordFace)
+}
+
+#Remove incorrect trials
+WordFace=subset(WordFace,correct_resp==1)
+
+#Principal components come with unpredictable sign. Here Positive has become negeative, so we reverse
+WordFace$word_score_pc<- -WordFace$word_score_pc
+
+### Scaling ### 
+
+#scale pc score for analysis
+WordFace$word_score_pc_sc<- scale(WordFace$word_score_pc)
+#Square for analysis
+WordFace$word_score_pc_sq<-WordFace$word_score_pc_sc^2
+#scale pc score at time -1 for analysis
+WordFace$word_score_pcN1_sc<- scale(WordFace$word_score_pcN1)
+#Square for analysis
+WordFace$word_score_pcN1_sq<-WordFace$word_score_pcN1_sc^2
+#scale time of day for analysis
+WordFace$time_sc<-scale(WordFace$time)
+#Square for analysis
+WordFace$time_sq<-scale(WordFace$time)^2
+#scale trial number for analysis
+WordFace$no_sc<-scale(WordFace$no)
+#Scale pause duration for analysis
+WordFace$delay_frames_before_sc<-scale(WordFace$delay_frames_before)
+
+WordFace$ID <- as.factor(WordFace$ID)
+length(levels(WordFace$ID))
+
+```
+
+## Repeated measures model using LmerTest
+
+```{r}
+library(lmerTest)
+#can be made more complex ad libitum
+model1<-lmer(rt~img+(1|ID)+(1|word),data=WordFace)
+summary(model1)
+```
+
+## Repeated measures model using a gamma distribution as the
+```{r}
+#Inspiration found in https://www.frontiersin.org/articles/10.3389/fpsyg.2015.01171/full
+
+# Sometimes only converges if helped a bit with the random intercepts
+WordFace2<-subset(WordFace,correct>0.7)
+
+model2<-glmer(rt~img+(1|ID)+(1|word),data=WordFace2,family=Gamma(link='identity'))
+summary(model2)
+
+```
+
+
+## Including Plots
+
+```{r}
+library(ggplot2)
+
+figure<-ggplot(aes(x=word_label,y=rt),data=WordFace)+geom_boxplot()
+figure
+```
+
+```{r}
+library(ggplot2)
+
+figure<-ggplot(aes(x=word_score_pc,y=rt),data=WordFace)+geom_smooth()+facet_wrap(ID~.)
+figure
+
+figure<-ggplot(aes(x=word_score_pc,y=rt),data=WordFace)+geom_smooth()+geom_text(aes(label=word,col=img))+facet_wrap(ID~.)
+figure
+```
+
+
+```{r}
+library(ggplot2)
+
+# Plot trial in session effect per participant (fails a bit because some participants lack data)
+#figure<-ggplot(aes(x=no,y=rt),data=WordFace)+geom_smooth()+geom_point(aes(col=word_label))+facet_wrap(~ID)
+#figure
+
+# Plot trial in session effect
+figure<-ggplot(aes(x=no,y=rt),data=WordFace)+geom_smooth()
+figure
+
+# Time of day using a nonlinear fit and a linear
+figure<-ggplot(aes(x=time,y=rt),data=WordFace)+geom_smooth()+geom_smooth(formula=y ~ poly(x, 1),method='lm',col='red')
+figure
+# Time of day with individual data points to show variability
+figure<-ggplot(aes(x=time,y=rt),data=WordFace)+geom_point(alpha=0.3,col='darkgreen')+geom_smooth()+geom_smooth(formula=y ~ poly(x, 1),method='lm',col='red')
+figure
+```
+
+#### A table showing mean RT over words
+
+```{r, warning=FALSE, message=FALSE, cache=FALSE}
+
+# A table showing the proportion of males drawn left as a function of the independent variables
+WordFaceAgg <-aggregate(WordFace$rt,
+    by=list(WordFace$word,WordFace$word_score_pc,WordFace$word_label),
+                    FUN=median, na.rm=TRUE)
+
+library(reshape)
+names(WordFaceAgg)<-c('word','word_score_pc','word_label','rt')
+
+#Plot median response times for words as function of sentiment score and class
+figure<-ggplot(aes(x=word_score_pc,y=rt),data=WordFaceAgg)+geom_smooth()+geom_text(aes(label=word,col=word_label))
+figure
+```
+
+# Import Binder semantic features
+```{r}
+
+library(xlsx)
+
+binder <- read.xlsx('~/Dropbox/DeixisSurvey2/mturk_survey/WordSet1_Ratings.xlsx', sheetIndex = 1)
+
+# Find indices of columns
+cols_binder_sem <- c(6:70)
+cols_binder_full <- c(6:74)
+
+# Format columns
+to_numeric <- function(x) {as.numeric(levels(x))[x]}
+to_convert <- names(dplyr::select_if(binder[,cols_binder_full], is.factor))
+
+
+#Convert semantic ratings to numeric values
+binder[, to_convert] <- sapply(binder[, to_convert], to_numeric)
+
+#Function to impute NAs with NAmean
+na_to_mean <- function(x) {x[is.na(x)]= mean(x, na.rm=TRUE);return(x)}
+binder[, to_convert] <- sapply(binder[, cols_binder_full], na_to_mean)
+
+#scale binder
+binder[,cols_binder_full] <- apply(binder[,cols_binder_full], 2, scale)
+
+head(binder)
+
+binderpca_raw<-princomp(binder[,6:70])
+binderpca<-data.frame(binder$Word,binderpca_raw$scores) %>%
+rename_at(vars(names(.)[1]), funs(c('word'))) 
+```
+
+### Merge RT data and Binder data
+```{r}
+# Add binder features
+WordFace_Bin <- WordFace  %>%
+  merge(., binderpca, by = 'word')
+
+```
+
+### Testing whether Binder PCA scores improves models for RT
+```{r}
+fmla <- as.formula(paste("rt ~ ",paste('img+imgN1+no+session+delay_frames_before+(1|ID)+(1|word)')))
+#fmla<-as.formula(paste(fmla,paste('+(1|ID)')))
+model1<-lmer(fmla , data=WordFace_Bin)
+
+fmla <- as.formula(paste("rt ~ ", paste(names(WordFace_Bin[,45:109]), collapse= "+"),paste('+img+imgN1+no+session+delay_frames_before+(1|ID)+(1|word)')))
+#fmla<-as.formula(paste(fmla,paste('+(1|ID)')))
+model_pca<-lmer(fmla , data=WordFace_Bin)
+
+summary(model_pca)
+anova(model1,model_pca)
+```
