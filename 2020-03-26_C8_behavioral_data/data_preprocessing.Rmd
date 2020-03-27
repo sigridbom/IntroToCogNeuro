@@ -1,0 +1,112 @@
+---
+title: "WordFace Data Analysis"
+author: "Jonathan"
+date: "26/3/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(fs)
+library(lubridate)
+```
+### Helper functions
+```{r}
+extract_time_from_filename <- function(filename) {
+  # Get time within parentheses using regex-voodoo
+  time_string <- str_extract(filename, "(?<=\\().+?(?=\\))")
+  # return the timestamp as time-datatype
+  lubridate::ymd_hms(time_string)
+}
+
+# Reads the file and adds the timestamp
+read_exp_files <- function(file_path) {
+  temp_df <- read_csv(file_path, col_types = cols(.default = "c"))
+  temp_df %>% mutate(time_stamp = extract_time_from_filename(file_path))
+}
+
+
+is_numeric_character <- function(x) {
+  !any(is.na(suppressWarnings(as.numeric(x)))) & is.character(x)
+}
+
+# Returns time of day in decimal-hour format
+time_of_day <- function(date_vec) {
+  hour(date_vec) + minute(date_vec)/60 + second(date_vec)/3600
+}
+
+```
+
+# Load data
+```{r}
+#################
+# Get all files #
+#################
+# Put the files from the old semester in a folder called "old_data" in your working directory (or change the path below)
+old_files <- dir_ls(path="./old_data/", glob="*csv")
+# Same for the new files (our year) :-)
+new_files <- dir_ls(path="./new_data/", glob="*csv")
+
+df_old <- old_files %>% 
+  map_dfr(read_exp_files)
+df_new <- new_files %>% 
+  map_dfr(read_exp_files)
+
+################
+# Joining data #
+################
+common_col_names <- intersect(colnames(df_old), colnames(df_new))
+WordFace <- df_old %>% 
+  select(common_col_names) %>% 
+  bind_rows(select(df_new, common_col_names))
+
+#####################
+# Fixing data types #
+#####################
+WordFace <- WordFace %>% 
+  mutate(rt = as.numeric(rt)) %>% 
+  # Making all the numeric columns numeric
+  mutate_if(sapply(., is_numeric_character), as.numeric)
+
+##########################
+# mutating and filtering #
+##########################
+WordFace <- WordFace %>% 
+  filter(correct_resp == 1) %>% 
+  # Filtering away Nina's shenanigans
+  filter(!(ID %in% c('holymolly', 'owl', 'pjh', 'roo', 'yogafrogen', 'vicedor'))) %>% 
+  # Creating lag-columns ("one-back" in original)
+  mutate(imgN1 = lag(img), 
+         word_labelN1 = lag(word_label),
+         word_score_pcN1 = lag(word_score_pc)) %>% 
+  # Create time of day in a cleaner way (yay!)
+  mutate(time = time_of_day(time_stamp+onset_img)) %>% 
+  #Principal components come with unpredictable sign. Here Positive has become negeative, so we reverse
+  mutate(word_score_pc = -word_score_pc, 
+         word_score_pcN1 = -word_score_pcN1)
+
+### Scaling ### 
+
+#scale pc score for analysis
+WordFace$word_score_pc_sc<- scale(WordFace$word_score_pc)
+#Square for analysis
+WordFace$word_score_pc_sq<-WordFace$word_score_pc_sc^2
+#scale pc score at time -1 for analysis
+WordFace$word_score_pcN1_sc<- scale(WordFace$word_score_pcN1)
+#Square for analysis
+WordFace$word_score_pcN1_sq<-WordFace$word_score_pcN1_sc^2
+#scale time of day for analysis
+WordFace$time_sc<-scale(WordFace$time)
+#Square for analysis
+WordFace$time_sq<-scale(WordFace$time)^2
+#scale trial number for analysis
+WordFace$no_sc<-scale(WordFace$no)
+#Scale pause duration for analysis
+WordFace$delay_frames_before_sc<-scale(WordFace$delay_frames_before)
+
+```
+

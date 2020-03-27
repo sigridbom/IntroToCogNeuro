@@ -181,9 +181,9 @@ figure
 # Import Binder semantic features
 ```{r}
 
-library(xlsx)
+library(readxl)
 
-binder <- read.xlsx('~/Dropbox/DeixisSurvey2/mturk_survey/WordSet1_Ratings.xlsx', sheetIndex = 1)
+binder <- readxl::read_xlsx('WordSet1_Ratings.xlsx')
 
 # Find indices of columns
 cols_binder_sem <- c(6:70)
@@ -191,15 +191,20 @@ cols_binder_full <- c(6:74)
 
 # Format columns
 to_numeric <- function(x) {as.numeric(levels(x))[x]}
-to_convert <- names(dplyr::select_if(binder[,cols_binder_full], is.factor))
+#to_convert <- names(dplyr::select_if(binder[,cols_binder_full], is.factor))
 
+#to_convert <- if(binder[,cols_binder_full] is. ) {
+ # filter()
+#  }
 
 #Convert semantic ratings to numeric values
-binder[, to_convert] <- sapply(binder[, to_convert], to_numeric)
+#binder[, to_convert] <- sapply(binder[, to_convert], to_numeric)
+
+binder[,cols_binder_full] <- sapply(binder[,cols_binder_full], as.numeric)
 
 #Function to impute NAs with NAmean
 na_to_mean <- function(x) {x[is.na(x)]= mean(x, na.rm=TRUE);return(x)}
-binder[, to_convert] <- sapply(binder[, cols_binder_full], na_to_mean)
+binder[, cols_binder_full] <- sapply(binder[, cols_binder_full], na_to_mean)
 
 #scale binder
 binder[,cols_binder_full] <- apply(binder[,cols_binder_full], 2, scale)
@@ -208,7 +213,8 @@ head(binder)
 
 binderpca_raw<-princomp(binder[,6:70])
 binderpca<-data.frame(binder$Word,binderpca_raw$scores) %>%
-rename_at(vars(names(.)[1]), funs(c('word'))) 
+rename_at(vars(names(.)[1]), funs(c('word')))
+
 ```
 
 ### Merge RT data and Binder data
@@ -225,10 +231,24 @@ fmla <- as.formula(paste("rt ~ ",paste('img+imgN1+no+session+delay_frames_before
 #fmla<-as.formula(paste(fmla,paste('+(1|ID)')))
 model1<-lmer(fmla , data=WordFace_Bin)
 
+# subsetting only the original script
+WordFace_original <- subset(WordFace, delay_frames_before == 336 | delay_frames_before == 180)
+model2 <- lmer(fmla, data = WordFace_original)
+
+summary(model2)
+
 fmla <- as.formula(paste("rt ~ ", paste(names(WordFace_Bin[,45:109]), collapse= "+"),paste('+img+imgN1+no+session+delay_frames_before+(1|ID)+(1|word)')))
 #fmla<-as.formula(paste(fmla,paste('+(1|ID)')))
 model_pca<-lmer(fmla , data=WordFace_Bin)
 
 summary(model_pca)
 anova(model1,model_pca)
+#anova(model2, model_pca)
+
 ```
+
+```{r}
+
+
+```
+
