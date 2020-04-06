@@ -257,6 +257,7 @@ WordFace_new <- subset(WordFace_Bin, delay_frames_before == 336 | delay_frames_b
 #model without scaled values
 m0 <- glmer(rt ~ imgN1 + gender + img*word_score_pc + delay_frames_before + (1|ID) + (1|word), data = WordFace_new, family = Gamma(link='identity'))
 
+#model with scaled values
 m1 <- glmer(rt ~ imgN1 + gender + img*word_score_pc_sc + delay_frames_before_sc + (1|ID) + (1|word), data = WordFace_new, family = Gamma(link='identity'))
 
 
