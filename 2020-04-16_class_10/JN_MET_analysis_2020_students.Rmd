@@ -1,0 +1,151 @@
+---
+title: "MET analysis 2020"
+author: "Johanne Nedergård"
+date: "16/4/2020"
+output: pdf_document
+---
+
+##Load and preproces 2020 data
+```{r}
+
+# code borrowed from Mikkel Wallentin
+
+MET2020 <- read_csv('met_data.csv')
+
+
+
+MET2020<-MET2020[1:28,]
+colnames(MET2020)[3] <- c('ID')
+MET2020$ID<-as.numeric(MET2020$ID)
+MET2020$ID[5]<-MET2020$ID[5]/10
+
+#Find correct responses for Melody
+melcor1=c("NO","YES","YES","NO","NO","YES","YES","NO","NO","YES","YES","NO","YES")
+melcor2=c("YES","YES", "NO","YES","NO","YES","NO","NO","NO","NO","NO","NO","NO")
+melcor3=c("YES","YES", "NO","YES","YES","YES","YES","NO","YES","NO","YES","YES","NO")
+melcor4=c("YES","NO","YES","NO","YES","NO","NO","NO","YES","YES","NO","NO","YES")
+melcor=c(melcor1,melcor2,melcor3,melcor4)
+mel=MET2020[,11:62]
+n=nrow(mel)
+melcomb=matrix(nrow=n,ncol=52)
+for (xx in 1:n){
+  melcomb[xx,]=(mel[xx,]==melcor)}
+melscore <- apply(melcomb, 1, sum)
+
+METscore<-data.frame(melscore)
+
+#rm('melcor1','melcor2','melcor3','melcor4','melcomb','melscore','n','xx','mel','melcor')
+
+#Find correct responses for Rhythm
+rytcor1=c("NO","NO","YES","NO","NO","YES","YES","YES","YES","NO","YES","NO","NO")
+rytcor2=c("YES","NO","YES","NO","YES","NO","NO","NO","NO","YES","YES","YES","YES")
+rytcor3=c("YES","NO","NO","YES","NO","YES","NO","NO","YES","NO","YES","YES","NO")
+rytcor4=c("YES","NO","NO","YES","YES","YES","NO","YES","NO","YES","YES","NO","NO")
+rytcor=c(rytcor1,rytcor2,rytcor3,rytcor4)
+ryt=MET2020[,65:116]
+n=nrow(ryt)
+rytcomb=matrix(nrow=n,ncol=52)
+for (xx in 1:n){
+  rytcomb[xx,]=(ryt[xx,]==rytcor)}
+rytscore <- apply(rytcomb, 1, sum)
+
+METscore$rytscore<-rytscore
+#Clean up
+rm('rytcor1','rytcor2','rytcor3','rytcor4','rytcomb','rytscore','n','xx','ryt','rytcor')
+```
+
+
+###Prepare additional variables
+```{r}
+METscore$totscore<-METscore$melscore+METscore$rytscore
+METscore$diffscore<-METscore$melscore-METscore$rytscore
+METscore$digit<-MET2020$'What was your forward digit span?'
+METscore$musician<-factor(MET2020$'Are you currently playing an instrument (min. one hour per week)?',labels=c('non','musician'))
+METscore$ID<-factor(MET2020$ID)
+METscore$age<-MET2020$'Your age in years'
+#METscore$class<-factor(MET2020$class)
+```
+
+
+
+##Exploring the data: Descriptive stats
+```{r}
+# e.g. summary(METscore)
+# also descriptive stats on different components of the MET (and digit span) for groups of participants, e.g. musicians and non-musicians
+```
+
+###Making histograms and QQ plots for each outcome variable
+
+```{r}
+# CHECK
+hist(METscore$melscore)
+hist(METscore$rytscore)
+hist(METscore$digit)
+
+library(ggplot2)
+qqnorm(METscore$melscore)
+qqnorm(METscore$rytscore)
+qqnorm(METscore$digit)
+
+#QQ plots with confidence intervals
+library(car)
+qqPlot(METscore$melscore)
+qqPlot(METscore$rytscore)
+qqPlot(METscore$digit)
+
+```
+
+###Boxplots for each outcome meassure as a function of group.
+
+```{r}
+library(ggplot2)
+
+# make plots exploring the different DVs (digit span, rhythm score, melody score) as a function of group
+
+```
+##Statistical analysis
+
+####-e.g. Student's t-test of difference between musicians and non-musicians
+```{R}
+
+# test here
+
+```
+
+
+###Plot Melody score against Rhythm score
+
+```{r}
+library(ggplot2)
+
+# see if rhythm score and melody score are correlated
+
+```
+
+##Statistical analysis
+
+####e.g. Pearson correlation between melody score and rhythm score
+```{R}
+
+# also test if they are correlated
+
+```
+
+
+###Plot digit span against MET score
+
+```{r}
+library(ggplot2)
+
+# plot to see if digit span and MET score are related
+
+```
+
+##Statistical analysis
+
+####Pearson correlation between digitspan and MET score
+```{R}
+
+# again also test it
+
+```

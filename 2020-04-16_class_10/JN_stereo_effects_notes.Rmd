@@ -1,0 +1,72 @@
+---
+title: "Make stereo effect"
+author: "Johanne Nedergård"
+date: "16/4/2020"
+output: pdf_document
+---
+
+
+
+## Make a sine wave with stereo effect based on the interaural time diffference
+
+```{r}
+
+library(tuneR)
+setwd('/Users/au651723/OneDrive_Aarhus_universitet/Aarhus/Intro_Cog_Neuro/cog_neurosci_intro_BSc_Cog_Sci_2019/class_assignments/')
+
+#520 micro seconds in samples (0.18m/340m/s) - The interaural time difference
+delay<-round(44100*0.00052)
+#Make vector of zeros for 520 microseconds
+empty <-matrix(0,ncol=delay)
+
+
+# constructing a Wave object (1 sec.) containing sinus sound with 440Hz:
+seq_for_sine <- seq(0, 2*pi, length = 44100)
+channel <- round(32000 * sin(440 * seq_for_sine))
+A1<-c(channel,empty)
+A2<-c(empty,channel)
+A_wave <- Wave(left = c(A2),right=c(A1))
+plot(A_wave)
+writeWave(A_wave,'sine_stereo_JN.wav')
+
+# now words
+words<-readWave('words1.wav')
+sound_break <- matrix(0,ncol=22050) # half a second
+channel1<-c(words@left,empty)
+channel2<-c(empty,words@right)
+
+Wobj <- Wave(left = c(channel2,sound_break,channel1),right=c(channel1,sound_break,channel2), bit=32,pcm=FALSE)
+writeWave(Wobj,'test.wav')
+plot(Wobj)
+
+
+
+```
+
+## Load a recorded sound file and add stereo effect based on the interaural time diffference
+```{r}
+setwd('/Users/au651723/OneDrive_Aarhus_universitet/Aarhus/Intro_Cog_Neuro/cog_neurosci_intro_BSc_Cog_Sci_2019/class_assignments/')
+library(tuneR)
+words<-readWave('words1.wav')
+channel1<-c(words@left,zz)
+channel2<-c(zz,words@right)
+
+words2 <- Wave(left = c(channel1,sound_break,channel2),right=c(channel2,sound_break,channel1),bit=32,pcm=FALSE)
+words2 <- normalize(words2) ## You might need to normalize your recorded file, putting it on a scale from -1 to 1.
+writeWave(words2,'words_stereo_JN.wav')
+
+```
+## Let us add a bit of sound shadow as well
+```{r}
+setwd('/Users/au651723/OneDrive_Aarhus_universitet/Aarhus/Intro_Cog_Neuro/cog_neurosci_intro_BSc_Cog_Sci_2019/class_assignments/')
+library(tuneR)
+words<-readWave('words1.wav')
+channel1<-c(words@left,empty)
+#Make channel 2 less strong
+channel2<-c(empty,0.8*words@right)
+
+words3 <- Wave(left = c(channel1,sound_break,channel2),right=c(channel2,sound_break,channel1),bit=32,pcm=FALSE)
+
+writeWave(words3,'words_stereo_shadow_JN.wav')
+
+```

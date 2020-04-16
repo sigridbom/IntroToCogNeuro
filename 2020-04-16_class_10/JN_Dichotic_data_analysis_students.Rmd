@@ -1,0 +1,74 @@
+---
+title: "Dichotic_analysis"
+author: "Johanne Nedergård"
+date: "16/4/2020"
+output: pdf_document
+---
+
+```{r}
+
+# code borrowed from Mikkel Wallentin
+
+pacman::p_load(tidyverse, ggpubr)
+
+dichotic <- read_csv("xid-8476735_1.csv")
+
+dichotic$ID<-1:dim(dichotic)
+dichotic$ID<-as.factor(dichotic$ID)
+```
+
+
+
+```{r}
+library(tidyr)
+
+#Make a factor for attend
+dichotic_long <- gather(dichotic, condition, measurement, neutral_right:attend_right_left, factor_key=TRUE)
+dichotic_long$attend<-'att_right'
+hest<-grep('^neutral',dichotic_long$condition)
+dichotic_long$attend[hest]<-'neutral'
+hest<-grep('attend_left',dichotic_long$condition)
+dichotic_long$attend[hest]<-'att_left'
+dichotic_long$attend<-as.factor(dichotic_long$attend)
+
+#Make a factor for left/right ear
+
+dichotic_long$ear='left'
+hest<-grep('^neutral_right',dichotic_long$condition)
+dichotic_long$ear[hest]='right'
+
+hest<-grep('right_right',dichotic_long$condition)
+dichotic_long$ear[hest]='right'
+
+hest<-grep('left_right',dichotic_long$condition)
+dichotic_long$ear[hest]='right'
+
+dichotic_long$ear<-as.factor(dichotic_long$ear)
+```
+
+
+```{r}
+library(ggplot2, ggpubr)
+
+# make a plot to visualise the data
+
+ggplot(dichotic_long, aes(condition, measurement)) + geom_point
+
+ggline(dichotic_long, x = "condition", y = "measurement", col = 'attend', add = c("mean_se", "dodge"), palette = "jco")
+
+```
+## The obvious model
+```{r}
+library(lme4)
+
+# create models to test your hypotheses - for example a model of 'ear' and 'attend' predicting words remembered 
+
+m1 <-lmer(ear ~ attend, dichotic_long)
+summary(m1)
+
+```
+```{r}
+
+met <- read_csv('met_data.csv')
+```
+
