@@ -1,0 +1,270 @@
+---
+title: "Neuroexam behavioral analysis"
+author: "Anders Hjulmand"
+date: "5/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#loading packages
+pacman::p_load("pracma", "ggplot2", "jpeg", "tidyverse", "plot.matrix", "reshape2", "quantmod", "lme4", "PANDA", "readr", "pastecs", "car", "lme4", "nlme", "ggpubr", "emmeans", "dplyr", "readxl", "lmerTest", "reshape", "psych", "xlsx", "openxlsx")
+
+
+#loading new data
+datadir1 <- list.files(path="/Users/sigridagersnap/Documents/R studio data/2. semester/IntroToCogNeuro/2020-03-26_C8_behavioral_data/faceWord_exp_data_2020", pattern="*.csv", full.names = TRUE) 
+#loading old data
+datadir2 <- list.files(path="/Users/sigridagersnap/Documents/R studio data/2. semester/IntroToCogNeuro/2020-03-26_C8_behavioral_data/faceWord_exp_data_old/", pattern="*.csv", full.names = TRUE)
+
+#Make a list of files from the two sources
+files_WordFace<-rbind(c(datadir1,datadir2), pattern="+?).csv",full.names = TRUE)
+```
+
+
+
+```{r}
+##################### MIKKELS STUFF ####################
+
+#Create a loop for loading and preprocessing
+for(iii in 1:length(files_WordFace)){
+  if(exists('data1')) rm(data1)
+  
+  #find time of day from log-file name
+  xx<-files_WordFace[1,iii]
+  #Counting file name characters from behind to find time in hours, e.g 00-24
+  h<-substr(xx, nchar(xx)-12, nchar(xx)-11)
+  #Counting file name characters from behind to find time in minutes, e.g 00-60
+  m<-substr(xx, nchar(xx)-9, nchar(xx)-8)
+  #Turn the minutes into fractions of an hour (because there only is 60 minutes per hour), e.g. 25 minutes = 42/100
+  m<-100*(as.integer(m)/60)
+  #paste together as 4 digit numer (ignoring that there are only 60 minutes per hour).
+  time=as.integer(paste(h,m,sep=''))
+  
+  #Load data
+  data1<-read.csv(files_WordFace[1,iii])
+  
+  #Time of day: Add fractions of hour from log data to the time covariate
+  data1$time<-time+(100*(data1$onset_img/60)/60)
+  
+  #Add some covariates if there is a full dataset
+  if(length(data1$no)>1){
+  #indices of trials before the present
+  oneback<-c(1,data1$no[2:length(data1$no)]-1)
+  #Add a covariate to see if the image from the previous trial had an influence on the response
+  #data1$imgN1<-data1$img[oneback]
+  #Add a covariate to see if the word type from the previous trial had an influence on the response
+  #data1$word_labelN1<-data1$word_label[oneback]
+   #Add a covariate to see if the word score from the previous trial had an influence on the response
+  #data1$word_score_pcN1<- -data1$word_score_pc[oneback]
+  }
+
+
+#Some participants misunderstood instructions and responded to words rather than images. This gives negative RTs. We need to filter out these data and unrealisticly fast RTs
+  data1=subset(data1,rt>0.1)
+  
+  data1$ID=as.character(data1$ID)
+    
+  #One participant saved every session under a different ID
+  if(length(data1$ID)>1){
+  if(data1$ID[1]=='holymolly'|data1$ID[1]=='owl'|data1$ID[1]=='pjh'|data1$ID[1]=='roo'|data1$ID[1]=='yogafrogen'){data1$ID<-'vicedor'}
+  
+  #Percentage accurcay in session
+  data1$correct=sum(data1$correct_resp==1)/60
+  }  
+  
+  if(iii ==1) WordFace=data1 else if(length(data1$ID)>0) WordFace=dplyr::bind_rows(data1,WordFace)
+}
+
+```
+
+
+```{r}
+################################## CLEANING UP #############################
+
+#Remove incorrect trials
+WordFace=subset(WordFace,correct_resp==1)
+
+#removing all the people who used their own version of the script
+WordFaceGood <- subset(WordFace, delay_frames_before == 180 | delay_frames_before == 336)
+WordFaceGood <- subset(WordFace, delay_frames_after == 180 | delay_frames_after == 336)
+
+#removing on value that doesnt disappear for some reason
+WordFaceGood <- WordFaceGood[-10492,]
+
+#This helped a lot with weird missing values in weird places, e.g. in "time"
+#but there still are some missing values nonetheless
+
+#making numbers that count from 1-13870
+WordFaceGood$help <- 1:NROW(WordFaceGood)
+```
+
+```{r}
+############################ IMPORT BINDER FEATURES ###################################
+binder <- readxl::read_xlsx('WordSet1_Ratings.xlsx')
+
+# Find indices of columns
+cols_binder_sem <- c(6:70)
+cols_binder_full <- c(6:74)
+
+# Format columns
+to_numeric <- function(x) {as.numeric(levels(x))[x]}
+#to_convert <- names(dplyr::select_if(binder[,cols_binder_full], is.factor))
+
+#to_convert <- if(binder[,cols_binder_full] is. ) {
+ # filter()
+#  }
+
+#Convert semantic ratings to numeric values
+#binder[, to_convert] <- sapply(binder[, to_convert], to_numeric)
+
+binder[,cols_binder_full] <- sapply(binder[,cols_binder_full], as.numeric)
+
+#Function to impute NAs with NAmean
+na_to_mean <- function(x) {x[is.na(x)]= mean(x, na.rm=TRUE);return(x)}
+binder[, cols_binder_full] <- sapply(binder[, cols_binder_full], na_to_mean)
+
+#scale binder
+binder[,cols_binder_full] <- apply(binder[,cols_binder_full], 2, scale)
+
+head(binder)
+
+binderpca_raw<-princomp(binder[,6:70])
+binderpca<-data.frame(binder$Word,binderpca_raw$scores) %>%
+rename_at(vars(names(.)[1]), funs(c('word')))
+```
+
+
+```{r}
+################################ FACTOR ANAYLSIS ###########################
+
+#checking the inflexion point
+
+paralleli <- fa.parallel(binder[,6:70], fm='minres', fa='fa', sim=F)
+
+
+#Doing FA on binder data
+binderfa_raw<-fa(binder[,6:70], nfactors=9, rotate="varimax", fm='minres')
+print(binderfa_raw)
+
+colnames(binder)[which(names(binder) == "Word")] <- "word"
+binderfa<-data.frame(binder$word,binderfa_raw$scores) %>%
+rename_at(vars(names(.)[1]), funs(c('word')))
+
+#Cheking loadings
+print(binderfa_raw, cut=0.45, order=T)
+
+#Making unpleasant absolute
+binderfa$Valence_abs <- abs(binderfa$MR3)
+
+```
+
+
+```{r}
+################ MERGING ###################
+
+# add FA to the WORDFACE dataframe
+WordFace_FA <- WordFaceGood  %>%
+  merge(., binderfa, by = 'word')
+
+#making better names
+names <- c("Physical_Concrete", "Unpleasant", "Auditory", "Movement", "Human", "Manipulation", "Size_Places", "Events_Time", "Positive_Arousal", "Valence_abs")
+new_names <- c(colnames(WordFace_FA[,1:35]), names)
+colnames(WordFace_FA) <- new_names
+```
+
+
+```{r}
+ ##################### ADDING LAG-VARIABLES ###############################
+WordFace_FA <- WordFace_FA %>% 
+mutate(ImgN1 = lag(img), 
+         Word_labelN1 = lag(word_label))
+
+
+# ADD MORE IF YOU LIKE
+```
+
+
+```{r}
+############ Scaling ###############
+
+#scaling factors
+WordFace_FA[,36:45] <- apply(WordFace_FA[,36:45], 2, scale)
+
+
+
+#scale time of day for analysis
+WordFace_FA$time_sc<-scale(WordFace_FA$time)
+
+#scale trial number for analysis
+WordFace_FA$no_sc<-scale(WordFace_FA$no)
+
+#Scale pause duration for analysis
+WordFace_FA$delay_frames_before_sc<-scale(WordFace_FA$delay_frames_before)
+
+#REMEMBER TO SCALE NEWLY ADDED LAG-VARIABLES
+
+```
+
+
+
+
+```{r}
+#####################################Making new file for paradigm-script###########################################
+
+#scaling factors
+binderfa[,2:11]<- apply(binderfa[,2:11], 2, scale)
+
+#merging
+paradigm <- merge(binder, binderfa, by = 'word')
+
+#adding new coloumn names
+names <- c("Physical_Concrete", "Unpleasant", "Auditory", "Movement", "Human", "Manipulation", "Size_Places", "Events_Time", "Positive_Arousal", "Valence_abs")
+new_names <- c(colnames(paradigm[,1:85]), names)
+colnames(paradigm) <- new_names
+
+
+#writing to xlsx - kan ikke få det her til at virke, kan i? - ja
+write.xlsx(paradigm, "paradigm.xlsx", col.names=T, row.names =T)
+
+```
+
+
+
+
+
+
+
+```{r}
+################# MAKING MODELS ####################
+
+# Making a model without factors from FA
+m1 <- glmer(rt ~ delay_frames_before_sc+time_sc+session+gender+ImgN1+img+(no_sc|ID)+(1|word), data = WordFace_FA,family=Gamma(link='identity'))
+summary(m1)
+
+
+#maybe change the model? e.g. adding some of the fixed effects as random effects instead
+
+```
+
+```{r}
+########### adding the factors from FA to m1 ####################
+
+fmla <- as.formula(paste("rt ~ ", paste(names(WordFace_FA[,36:38:45]), collapse= "+"),paste('+delay_frames_before_sc+time_sc+session+gender+ImgN1+img*WordFace_FA$Unpleasant+(no_sc|ID)+(1|word)')))
+m2 <- glmer(fmla , data=WordFace_FA,family=Gamma(link='identity'))
+
+summary(m2)
+anova(m1,m2)
+
+#Factors from FA significantly improves the model
+
+```
+
+
+
+
+
+
+
