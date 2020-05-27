@@ -85,7 +85,7 @@ for(iii in 1:length(files_WordFace)){
 ################################## CLEANING UP #############################
 
 #Remove incorrect trials
-WordFace <- subset(WordFace,correct_resp==1)
+WordFace=subset(WordFace,correct_resp==1)
 
 #removing all the people who used their own version of the script
 WordFaceGood <- subset(WordFace, delay_frames_before == 180 | delay_frames_before == 336)
@@ -226,7 +226,7 @@ new_names <- c(colnames(paradigm[,1:85]), names)
 colnames(paradigm) <- new_names
 
 
-#writing to xlsx - kan ikke få det her til at virke, kan i?
+#writing to xlsx - kan ikke få det her til at virke, kan i? - ja
 write.xlsx(paradigm, "paradigm.xlsx", col.names=T, row.names =T)
 
 ```
@@ -263,45 +263,16 @@ anova(m1,m2)
 ```
 
 
+
 ```{r}
+#how many participants? 
 
-#find number of words used in experiment
-length(unique(WordFace_FA$word))
-#360
+length(unique(WordFaceGood$ID))
 
-# find mean rt for words used
-mean_rt <- WordFace_FA %>% group_by(word) %>% summarise(mean(rt))
+# 50 participants
 
-#merge with paradigm scores
-new_df <- merge(mean_rt, paradigm, by = 'word')
-
-#rename column
-colnames(new_df)[2] <- 'mean_rt'
-
-as.matrix(new_df)
-
-#make correlation df
-new_df_cor <- new_df[,2:96]
-
-# find problem columns
-lapply(new_df_cor, class)
-
-#remove those columns
-columns_to_remove <- c("word", "IMG", "...81", "Type", "Super Category", "Category", "Kmeans28 Category")
-new_df_cor[columns_to_remove] <- NULL
-
-#make correlation test
-cor(new_df_cor, method = 'spearman')
-
-pacman::p_load(psych)
-corr.test(new_df[,2:96], method = 'spearman')
-
-
-test <- merge(new_df, binderfa, by='word')
 
 ```
-
-
 
 
 
