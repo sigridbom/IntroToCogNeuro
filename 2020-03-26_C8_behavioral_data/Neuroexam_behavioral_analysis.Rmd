@@ -13,11 +13,10 @@ knitr::opts_chunk$set(echo = TRUE)
 #loading packages
 pacman::p_load("pracma", "ggplot2", "jpeg", "tidyverse", "plot.matrix", "reshape2", "quantmod", "lme4", "PANDA", "readr", "pastecs", "car", "lme4", "nlme", "ggpubr", "emmeans", "dplyr", "readxl", "lmerTest", "reshape", "psych", "xlsx", "openxlsx")
 
-
 #loading new data
 datadir1 <- list.files(path="/Users/sigridagersnap/Documents/R studio data/2. semester/IntroToCogNeuro/2020-03-26_C8_behavioral_data/faceWord_exp_data_2020", pattern="*.csv", full.names = TRUE) 
 #loading old data
-datadir2 <- list.files(path="/Users/sigridagersnap/Documents/R studio data/2. semester/IntroToCogNeuro/2020-03-26_C8_behavioral_data/faceWord_exp_data_old/", pattern="*.csv", full.names = TRUE)
+datadir2 <- list.files(path="/Users/sigridagersnap/Documents/R studio data/2. semester/IntroToCogNeuro/2020-03-26_C8_behavioral_data/faceWord_exp_data_old", pattern="*.csv", full.names = TRUE)
 
 #Make a list of files from the two sources
 files_WordFace<-rbind(c(datadir1,datadir2), pattern="+?).csv",full.names = TRUE)
@@ -260,6 +259,24 @@ anova(m1,m2)
 
 #Factors from FA significantly improves the model
 
+
+fmla <- as.formula(paste("rt ~ ", paste(names(WordFace_FA[,37]), collapse= "+"),paste('+ img + (no|ID) + (1|word) + (1|delay_frames_before) + (1|time) + (1|session)')))
+
+m3 <- glmer(fmla , data=WordFace_FA,family=Gamma(link='identity'))
+
+WordFace_FA$img <- relevel(WordFace_FA$img, 'image_stim_n.png')
+
+
+m4 <- glmer(rt ~ WordFace_FA$Unpleasant + WordFace_FA$img + (WordFace_FA$no|WordFace_FA$ID) + (1|WordFace_FA$word) + (1|WordFace_FA$delay_frames_before) + (1|WordFace_FA$time) + (1|WordFace_FA$session), data = WordFace_FA, family = Gamma(link = 'identity'))
+
+summary(m4)
+
+m5 <- glmer(rt ~ WordFace_FA$word_label + WordFace_FA$img + (WordFace_FA$no|WordFace_FA$ID), data = WordFace_FA, family = Gamma(link = 'identity'))
+
+summary(m5)
+
+
+#
 ```
 
 
@@ -304,5 +321,36 @@ test <- merge(new_df, binderfa, by='word')
 
 
 
+```{r visual}
+
+
+pacman::p_load(ggplot2, ggpubr, plyr)
+
+# make a plot to visualise the data
+
+img_plot <- subset(WordFace_FA$img, WordFace_FA$rt)
+
+WordFace_FA_group <- WordFace_FA %>% group_by(img)
+
+WordFace_FA_group$img <- revalue(WordFace_FA_group$img, c('image_stim_n.png' = 'negative_faces', 'image_stim_p.png' = 'positive_faces'))
+  
+#revalue(x, c("beta"="two", "gamma"="three"))
+
+ggline(WordFace_FA_group, x = "img", y = "rt", col = 'img', add = c("mean_se", "dodge"), palette = "jco")
+
+
+ggplot(WordFace_FA_group, aes(img, rt)) + geom_bar()
+
+#plot for valence of words
+
+WordFace_FA$Unpleasant_cat <- ifelse(WordFace_FA$Unpleasant > 0, 'negative_word', 'positive_word')
+
+WordFace_FA_group_cat <- WordFace_FA %>% group_by(Unpleasant_cat)
+
+ggline(WordFace_FA_group_cat, x = "Unpleasant_cat", y = "rt", col = 'Unpleasant_cat', add = c("mean_se", "dodge"), palette = "jco")
+
+ggplot(WordFace_FA, aes(Unpleasant_cat, rt)) + geom_point() + geom_smooth()
+
+```
 
 
